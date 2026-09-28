@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { AnswerMap, ScreenState, ResultFilter, Question } from "@/types/quiz";
 import { QUESTIONS } from "@/data/questions";
+import { INDUCTIVE_QUESTIONS } from "@/data/inductiveQuestions";
 import {
   calculateScore,
   formatTime,
@@ -13,8 +14,24 @@ import {
   CHOICE_LABELS,
 } from "@/lib/quiz";
 
+const TEST_MODELS = [
+  { id: "abstract", label: "Abstract Reasoning" },
+  { id: "inductive", label: "Inductive Reasoning" },
+  { id: "deductive", label: "Deductive Reasoning" },
+  { id: "numerical", label: "Numerical Reasoning" },
+] as const;
+
+type TestModel = (typeof TEST_MODELS)[number]["id"];
+
+const QUESTION_BANKS: Partial<Record<TestModel, Question[]>> = {
+  abstract: QUESTIONS,
+  inductive: INDUCTIVE_QUESTIONS,
+};
+
 export default function Home() {
   const [screen, setScreen] = useState<ScreenState>("intro");
+  const [selectedModel, setSelectedModel] = useState<TestModel>("abstract");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeQuestions, setActiveQuestions] = useState<Question[]>(() =>
     createShuffledQuiz(QUESTIONS, TEST_QUESTION_COUNT)
   );
@@ -40,7 +57,8 @@ export default function Home() {
   }, [screen]);
 
   const handleStart = () => {
-    setActiveQuestions(createShuffledQuiz(QUESTIONS, TEST_QUESTION_COUNT));
+    const bank = QUESTION_BANKS[selectedModel] || QUESTIONS;
+    setActiveQuestions(createShuffledQuiz(bank, Math.min(TEST_QUESTION_COUNT, bank.length)));
     setAnswers({});
     setVisited(new Set([0]));
     setCurrentIdx(0);
@@ -80,19 +98,117 @@ export default function Home() {
   const remainingCount = activeQuestions.length - answeredCount;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 font-sans transition-colors">
-      <div className="w-full max-w-6xl">
-        {screen === "intro" && (
-          <div className="max-w-2xl mx-auto bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-sm text-center">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40 mb-4">
-              Employment Assessment Simulator
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 flex flex-col font-sans transition-colors">
+      <header className="w-full border-b border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-[#0c1220]/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
+              CogTest
             </span>
+            <span className="hidden sm:inline-flex text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
+              Simulator
+            </span>
+          </div>
 
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3 text-slate-950 dark:text-white">
-              Abstract Reasoning Test
-            </h1>
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
+            {TEST_MODELS.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                onClick={() => {
+                  setSelectedModel(model.id);
+                  if (screen !== "intro") handleBackToMain();
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition cursor-pointer whitespace-nowrap border ${
+                  selectedModel === model.id
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                    : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60"
+                }`}
+              >
+                {model.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Mobile Selector */}
+          <div className="relative md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-[#161f33] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 cursor-pointer shadow-2xs"
+            >
+              <span className="truncate max-w-[150px] xs:max-w-[200px]">
+                {TEST_MODELS.find((m) => m.id === selectedModel)?.label}
+              </span>
+              <svg
+                className={`w-3.5 h-3.5 shrink-0 text-slate-500 transition-transform ${mobileMenuOpen ? "rotate-180" : ""}`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+
+            {mobileMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setMobileMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800/80 mb-0.5">
+                    Select Test Model
+                  </div>
+                  {TEST_MODELS.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModel(model.id);
+                        setMobileMenuOpen(false);
+                        if (screen !== "intro") handleBackToMain();
+                      }}
+                      className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-xs font-medium text-left transition cursor-pointer ${
+                        selectedModel === model.id
+                          ? "bg-indigo-600 text-white font-semibold"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70"
+                      }`}
+                    >
+                      <span>{model.label}</span>
+                      {selectedModel === model.id && (
+                        <span className="text-xs font-bold">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-6xl">
+          {screen === "intro" && (
+            <div className="max-w-2xl mx-auto bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-sm text-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40 mb-4">
+                Employment Assessment Simulator
+              </span>
+
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3 text-slate-950 dark:text-white">
+                {TEST_MODELS.find((m) => m.id === selectedModel)?.label} Test
+              </h1>
             <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
-              Presents 25 randomized questions selected from an active 100-question pool. Question ordering and answer choice positions are reshuffled on every session.
+              {selectedModel === "abstract"
+                ? "Presents 25 randomized questions selected from an active 100-question pool. Question ordering and answer choice positions are reshuffled on every session."
+                : selectedModel === "inductive"
+                ? "Presents 25 SHL-model inductive reasoning questions testing pattern discovery, matrix logic, and sequence rules. Question ordering and answer choice positions are reshuffled on every session."
+                : "Questions for this assessment model are currently in development."}
             </p>
 
             <div className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto text-left">
@@ -116,9 +232,10 @@ export default function Home() {
 
             <button
               onClick={handleStart}
-              className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-2xl shadow-sm hover:shadow transition cursor-pointer"
+              disabled={!QUESTION_BANKS[selectedModel]}
+              className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-sm hover:shadow transition cursor-pointer"
             >
-              Start Practice Test
+              {QUESTION_BANKS[selectedModel] ? "Start Practice Test" : "Coming Soon"}
             </button>
           </div>
         )}
@@ -474,6 +591,7 @@ export default function Home() {
           </div>
         )}
       </div>
+      </main>
     </div>
   );
 }
