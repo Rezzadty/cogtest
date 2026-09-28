@@ -183,6 +183,7 @@ function AnswerComparison({ q, userAns, isCorrect }: { q: Question; userAns?: nu
 export default function Home() {
   const [screen, setScreen] = useState<ScreenState>("intro");
   const [selectedModel, setSelectedModel] = useState<TestModel>("abstract");
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [navWarnOpen, setNavWarnOpen] = useState(false);
@@ -400,7 +401,6 @@ export default function Home() {
         </div>  
       </div>  
     </header>
-
       <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8"> 
         <div key={`${screen}-${selectedModel}`} className="w-full max-w-6xl animate-[screenIn_0.35s_ease-out]">
           {screen === "intro" && (
@@ -558,7 +558,7 @@ export default function Home() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => setScreen("results")}
+                        onClick={() => setSubmitConfirmOpen(true)}    // ← opens the confirmation instead
                         className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer shadow-xs"
                       >
                         Submit Test
@@ -621,6 +621,32 @@ export default function Home() {
               <div className="flex gap-3">
                 <button onClick={() => setExitConfirmOpen(false)} className={BTN_GHOST}>Continue Test</button>
                 <button onClick={() => { setExitConfirmOpen(false); handleBackToMain(); }} className={`${BTN_SOLID} bg-rose-600 hover:bg-rose-500`}>Exit</button>
+              </div>
+            </Modal>
+          )}
+          
+          {/* --------------------------- Submit Confirm -------------------------- */}
+          {submitConfirmOpen && (
+            <Modal onClose={() => setSubmitConfirmOpen(false)}>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-3">Submit Test?</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                You answered <span className="font-bold text-slate-700 dark:text-slate-200">{answeredCount}</span> of{" "}
+                {activeQuestions.length} questions
+                {remainingCount > 0 && (
+                  <> — <span className="font-bold text-amber-600 dark:text-amber-400">{remainingCount} still unanswered</span>.</>
+                )}
+                Once submitted, you cannot change your answers.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setSubmitConfirmOpen(false)} className={BTN_GHOST}>
+                  Keep Working
+                </button>
+                <button
+                  onClick={() => { setSubmitConfirmOpen(false); setScreen("results"); }}
+                  className={`${BTN_SOLID} bg-emerald-600 hover:bg-emerald-500`}
+                >
+                  Submit
+                </button>
               </div>
             </Modal>
           )}
