@@ -399,16 +399,20 @@ function PerimeterTumbling({ corner, innerShape }: { corner: "tl" | "tr" | "br" 
 }
 
 function HourglassDots({ topDots, botDots }: { topDots: number; botDots: number }) {
+  const topSpacing = 12;
+  const topStartX = 50 - ((topDots - 1) * topSpacing) / 2;
+  const botSpacing = 12;
+  const botStartX = 50 - ((botDots - 1) * botSpacing) / 2;
   return (
     <svg viewBox="0 0 100 100" className="w-full h-full p-2">
       <polygon points="24,20 76,20 50,50" stroke="currentColor" strokeWidth="3" fill="none" />
       <polygon points="50,50 76,80 24,80" stroke="currentColor" strokeWidth="3" fill="none" />
-      <text x="50" y="34" textAnchor="middle" dominantBaseline="middle" fill="currentColor" fontSize="13" fontWeight="bold">
-        {"•".repeat(topDots)}
-      </text>
-      <text x="50" y="68" textAnchor="middle" dominantBaseline="middle" fill="currentColor" fontSize="13" fontWeight="bold">
-        {"•".repeat(botDots)}
-      </text>
+      {Array.from({ length: topDots }).map((_, i) => (
+        <circle key={`t${i}`} cx={topStartX + i * topSpacing} cy={34} r="4" fill="currentColor" />
+      ))}
+      {Array.from({ length: botDots }).map((_, i) => (
+        <circle key={`b${i}`} cx={botStartX + i * botSpacing} cy={68} r="4" fill="currentColor" />
+      ))}
     </svg>
   );
 }

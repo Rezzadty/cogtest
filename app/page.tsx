@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import { AnswerMap, ScreenState, ResultFilter, Question } from "@/types/quiz";
 import { QUESTIONS } from "@/data/questions";
 import { INDUCTIVE_QUESTIONS } from "@/data/inductiveQuestions";
+import { DEDUCTIVE_QUESTIONS } from "@/data/deductiveQuestions";
 import {
   calculateScore,
   formatTime,
   getQuestionStatus,
   createShuffledQuiz,
-  DEFAULT_DURATION_SECONDS,
   TEST_QUESTION_COUNT,
   CHOICE_LABELS,
 } from "@/lib/quiz";
@@ -23,22 +23,34 @@ const TEST_MODELS = [
 
 type TestModel = (typeof TEST_MODELS)[number]["id"];
 
+const MODEL_DURATION_SECONDS: Record<TestModel, number> = {
+  abstract: 600,
+  inductive: 600,
+  deductive: 900,
+  numerical: 600,
+};
+
 const QUESTION_BANKS: Partial<Record<TestModel, Question[]>> = {
   abstract: QUESTIONS,
   inductive: INDUCTIVE_QUESTIONS,
+  deductive: DEDUCTIVE_QUESTIONS,
 };
 
 export default function Home() {
   const [screen, setScreen] = useState<ScreenState>("intro");
   const [selectedModel, setSelectedModel] = useState<TestModel>("abstract");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [navWarnOpen, setNavWarnOpen] = useState(false);
+  const [pendingModel, setPendingModel] = useState<TestModel | null>(null);
   const [activeQuestions, setActiveQuestions] = useState<Question[]>(() =>
     createShuffledQuiz(QUESTIONS, TEST_QUESTION_COUNT)
   );
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [visited, setVisited] = useState<Set<number>>(new Set([0]));
-  const [secondsLeft, setSecondsLeft] = useState(DEFAULT_DURATION_SECONDS);
+  const currentDuration = MODEL_DURATION_SECONDS[selectedModel];
+  const [secondsLeft, setSecondsLeft] = useState(MODEL_DURATION_SECONDS["abstract"]);
   const [filter, setFilter] = useState<ResultFilter>("all");
 
   useEffect(() => {
@@ -62,7 +74,7 @@ export default function Home() {
     setAnswers({});
     setVisited(new Set([0]));
     setCurrentIdx(0);
-    setSecondsLeft(DEFAULT_DURATION_SECONDS);
+    setSecondsLeft(currentDuration);
     setScreen("test");
   };
 
@@ -70,12 +82,32 @@ export default function Home() {
     setAnswers({});
     setVisited(new Set([0]));
     setCurrentIdx(0);
-    setSecondsLeft(DEFAULT_DURATION_SECONDS);
+    setSecondsLeft(currentDuration);
     setScreen("intro");
   };
 
   const handleSelect = (choiceIdx: number) => {
     setAnswers((prev) => ({ ...prev, [currentIdx]: choiceIdx }));
+  };
+
+  const handleNavModelClick = (modelId: TestModel) => {
+    if (screen === "test") {
+      setPendingModel(modelId);
+      setNavWarnOpen(true);
+    } else {
+      setSelectedModel(modelId);
+      setSecondsLeft(MODEL_DURATION_SECONDS[modelId]);
+    }
+  };
+
+  const confirmNavSwitch = () => {
+    if (pendingModel) {
+      setSelectedModel(pendingModel);
+      setSecondsLeft(MODEL_DURATION_SECONDS[pendingModel]);
+      handleBackToMain();
+      setPendingModel(null);
+    }
+    setNavWarnOpen(false);
   };
 
   const jumpTo = (idx: number) => {
@@ -116,10 +148,7 @@ export default function Home() {
               <button
                 key={model.id}
                 type="button"
-                onClick={() => {
-                  setSelectedModel(model.id);
-                  if (screen !== "intro") handleBackToMain();
-                }}
+                onClick={() => handleNavModelClick(model.id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition cursor-pointer whitespace-nowrap border ${
                   selectedModel === model.id
                     ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
@@ -138,7 +167,7 @@ export default function Home() {
               onClick={() => setMobileMenuOpen((v) => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-[#161f33] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 cursor-pointer shadow-2xs"
             >
-              <span className="truncate max-w-[150px] xs:max-w-[200px]">
+              <span className="truncate max-w-150px xs:max-w-[200px]">
                 {TEST_MODELS.find((m) => m.id === selectedModel)?.label}
               </span>
               <svg
@@ -169,9 +198,8 @@ export default function Home() {
                       key={model.id}
                       type="button"
                       onClick={() => {
-                        setSelectedModel(model.id);
                         setMobileMenuOpen(false);
-                        if (screen !== "intro") handleBackToMain();
+                        handleNavModelClick(model.id);
                       }}
                       className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-xs font-medium text-left transition cursor-pointer ${
                         selectedModel === model.id
@@ -181,7 +209,9 @@ export default function Home() {
                     >
                       <span>{model.label}</span>
                       {selectedModel === model.id && (
-                        <span className="text-xs font-bold">✓</span>
+                        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="2,8 6,12 14,4" />
+                        </svg>
                       )}
                     </button>
                   ))}
@@ -208,6 +238,8 @@ export default function Home() {
                 ? "Presents 25 randomized questions selected from an active 100-question pool. Question ordering and answer choice positions are reshuffled on every session."
                 : selectedModel === "inductive"
                 ? "Presents 25 SHL-model inductive reasoning questions testing pattern discovery, matrix logic, and sequence rules. Question ordering and answer choice positions are reshuffled on every session."
+                : selectedModel === "deductive"
+                ? "Presents 25 SHL-model deductive reasoning questions testing syllogisms, arrangement constraints, and conditional logic. Question ordering and answer choice positions are reshuffled on every session."
                 : "Questions for this assessment model are currently in development."}
             </p>
 
@@ -218,7 +250,7 @@ export default function Home() {
               </div>
               <div className="bg-slate-50 dark:bg-[#161f33] border border-slate-200/60 dark:border-slate-800/80 p-3.5 rounded-2xl">
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">Time Limit</div>
-                <div className="text-xl sm:text-2xl font-bold mt-0.5 text-slate-900 dark:text-slate-100">10 min</div>
+                <div className="text-xl sm:text-2xl font-bold mt-0.5 text-slate-900 dark:text-slate-100">{Math.floor(currentDuration / 60)} min</div>
               </div>
               <div className="bg-slate-50 dark:bg-[#161f33] border border-slate-200/60 dark:border-slate-800/80 p-3.5 rounded-2xl">
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">Cutoff</div>
@@ -244,34 +276,60 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] items-start gap-6">
             <div className="w-full bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800/80 rounded-3xl p-5 sm:p-8 shadow-xs">
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Question</span>
-                    <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">
-                      {currentIdx + 1} <span className="text-slate-400 text-sm font-normal">/ {activeQuestions.length}</span>
-                    </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Question</span>
+                  <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+                    {currentIdx + 1} <span className="text-slate-400 text-sm font-normal">/ {activeQuestions.length}</span>
                   </div>
-                  <button
-                    onClick={handleBackToMain}
-                    className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition cursor-pointer"
-                  >
-                    ← Exit
-                  </button>
                 </div>
 
-                <div className={`font-mono font-bold text-sm px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-                  secondsLeft <= 90
-                    ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50 animate-pulse"
-                    : "bg-slate-100 text-slate-800 border-slate-200/80 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700/60"
-                }`}>
-                  <span>⏱</span>
-                  <span>{formatTime(secondsLeft)}</span>
+                <div className="flex items-center gap-2">
+                  <div className={`font-mono font-bold text-sm px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+                    secondsLeft <= 90
+                      ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50 animate-pulse"
+                      : "bg-slate-100 text-slate-800 border-slate-200/80 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700/60"
+                  }`}>
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="8" cy="9" r="5.5" />
+                      <polyline points="8,6 8,9 10,9" />
+                      <line x1="6" y1="1.5" x2="10" y2="1.5" strokeWidth="2" />
+                    </svg>
+                    <span>{formatTime(secondsLeft)}</span>
+                  </div>
+                  <button
+                    onClick={() => setExitConfirmOpen(true)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition cursor-pointer"
+                  >
+                    Exit
+                  </button>
                 </div>
               </div>
 
               <h2 className="text-base sm:text-lg font-semibold mb-5 text-slate-900 dark:text-slate-100">{currentQ.prompt}</h2>
 
-              {currentQ.type === "matrix" ? (
+              {currentQ.type === "deductive" ? (
+                <div className="mb-6 p-4 sm:p-5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2.5 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="1" width="12" height="14" rx="1.5" />
+                      <line x1="5" y1="5" x2="11" y2="5" />
+                      <line x1="5" y1="8" x2="11" y2="8" />
+                      <line x1="5" y1="11" x2="9" y2="11" />
+                    </svg>
+                    <span>Premises &amp; Constraints</span>
+                  </div>
+                  <div className="space-y-2 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                    {currentQ.sequence.map((rule, rIdx) => (
+                      <div key={rIdx} className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                          {rIdx + 1}
+                        </span>
+                        <span>{rule}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : currentQ.type === "matrix" ? (
                 <div className="mb-6 p-4 sm:p-5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex justify-center">
                   <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-xs sm:max-w-sm w-full">
                     {currentQ.sequence.map((item, idx) => (
@@ -304,23 +362,37 @@ export default function Home() {
                 <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-3">
                   Select Answer Choice
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className={currentQ.type === "deductive" ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-2 sm:grid-cols-4 gap-3"}>
                   {currentQ.options.map((opt, optIdx) => {
                     const isSelected = answers[currentIdx] === optIdx;
                     return (
                       <button
                         key={optIdx}
                         onClick={() => handleSelect(optIdx)}
-                        className={`relative aspect-square sm:aspect-auto sm:h-28 flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all cursor-pointer ${
+                        className={`relative flex items-center p-3.5 sm:p-4 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                          currentQ.type === "deductive"
+                            ? "min-h-64px"
+                            : "aspect-square sm:aspect-auto sm:h-28 flex-col justify-center"
+                        } ${
                           isSelected
                             ? "border-indigo-600 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-950/40 shadow-xs"
                             : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#161f33]/40 hover:border-slate-300 dark:hover:border-slate-700"
                         }`}
                       >
-                        <span className={`absolute top-2 left-2 text-xs font-bold ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>
+                        <span
+                          className={`${
+                            currentQ.type === "deductive"
+                              ? "shrink-0 mr-3 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold"
+                              : "absolute top-2 left-2 text-xs font-bold"
+                          } ${
+                            isSelected
+                              ? "bg-indigo-600 text-white"
+                              : "bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                          }`}
+                        >
                           {CHOICE_LABELS[optIdx]}
                         </span>
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mt-1">
+                        <div className={currentQ.type === "deductive" ? "flex-1 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100" : "w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mt-1"}>
                           {opt}
                         </div>
                       </button>
@@ -434,6 +506,75 @@ export default function Home() {
           </div>
         )}
 
+        {exitConfirmOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              onClick={() => setExitConfirmOpen(false)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-rose-600 dark:text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </div>
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-1">Exit Test?</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                  Your progress will be lost and you will return to the main page. This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setExitConfirmOpen(false)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition cursor-pointer"
+                  >
+                    Continue Test
+                  </button>
+                  <button
+                    onClick={() => { setExitConfirmOpen(false); handleBackToMain(); }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition cursor-pointer shadow-xs"
+                  >
+                    Exit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {navWarnOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              onClick={() => { setNavWarnOpen(false); setPendingModel(null); }}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center">
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-6">Switch Test Model?</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                  You are currently in the middle of a test. Switching models will discard your current progress.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setNavWarnOpen(false); setPendingModel(null); }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition cursor-pointer"
+                  >
+                    Continue Test
+                  </button>
+                  <button
+                    onClick={confirmNavSwitch}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-sm font-semibold transition cursor-pointer shadow-xs"
+                  >
+                    Switch Model
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {screen === "results" && (
           <div className="space-y-6">
             <div className="bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-xs text-center">
@@ -523,8 +664,19 @@ export default function Home() {
                     </div>
 
                     <div className="my-4 p-3.5 bg-slate-50 dark:bg-[#161f33]/50 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-x-auto">
-                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Pattern:</div>
-                      {q.type === "matrix" ? (
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                        {q.type === "deductive" ? "Premises:" : "Pattern:"}
+                      </div>
+                      {q.type === "deductive" ? (
+                        <div className="space-y-1.5 text-xs text-slate-800 dark:text-slate-200">
+                          {q.sequence.map((rule, sIdx) => (
+                            <div key={sIdx} className="flex items-start gap-2">
+                              <span className="text-indigo-500 font-bold shrink-0">{sIdx + 1}.</span>
+                              <span>{rule}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : q.type === "matrix" ? (
                         <div className="grid grid-cols-3 gap-2 max-w-xs">
                           {q.sequence.map((item, sIdx) => (
                             <div key={sIdx} className="w-14 h-14 bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center">
@@ -550,35 +702,57 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3">
-                      <div className={`p-3 rounded-2xl border flex items-center gap-3 ${
-                        isCorrect
-                          ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/60"
-                          : "bg-rose-50/40 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/60"
-                      }`}>
-                        <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center shrink-0">
-                          {userAns !== undefined ? q.options[userAns] : <span className="text-xs text-slate-400">None</span>}
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-500">Your Answer</div>
-                          <div className="font-bold text-sm">
-                            {userAns !== undefined ? `Option ${CHOICE_LABELS[userAns]}` : "Skipped"}
+                    {q.type === "deductive" ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3">
+                        <div className={`p-3.5 rounded-2xl border flex flex-col justify-center ${
+                          isCorrect
+                            ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/60"
+                            : "bg-rose-50/40 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/60"
+                        }`}>
+                          <div className="text-xs text-slate-500 mb-1">Your Answer</div>
+                          <div className="font-bold text-sm text-slate-900 dark:text-white">
+                            {userAns !== undefined ? `Option ${CHOICE_LABELS[userAns]}: ${q.options[userAns]}` : "Skipped"}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center gap-3">
-                        <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-center shrink-0">
-                          {q.options[q.correct]}
-                        </div>
-                        <div>
-                          <div className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Correct Answer</div>
+                        <div className="p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex flex-col justify-center">
+                          <div className="text-xs text-emerald-700 dark:text-emerald-400 mb-1">Correct Answer</div>
                           <div className="font-bold text-sm text-emerald-950 dark:text-emerald-200">
-                            Option {CHOICE_LABELS[q.correct]}
+                            Option {CHOICE_LABELS[q.correct]}: {q.options[q.correct]}
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3">
+                        <div className={`p-3 rounded-2xl border flex items-center gap-3 ${
+                          isCorrect
+                            ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/60"
+                            : "bg-rose-50/40 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/60"
+                        }`}>
+                          <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center shrink-0">
+                            {userAns !== undefined ? q.options[userAns] : <span className="text-xs text-slate-400">None</span>}
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-500">Your Answer</div>
+                            <div className="font-bold text-sm">
+                              {userAns !== undefined ? `Option ${CHOICE_LABELS[userAns]}` : "Skipped"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center gap-3">
+                          <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-center shrink-0">
+                            {q.options[q.correct]}
+                          </div>
+                          <div>
+                            <div className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Correct Answer</div>
+                            <div className="font-bold text-sm text-emerald-950 dark:text-emerald-200">
+                              Option {CHOICE_LABELS[q.correct]}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-3 p-3.5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl text-xs sm:text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 leading-relaxed">
                       <span className="font-bold text-slate-900 dark:text-white">Rule: </span>

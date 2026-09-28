@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-export type QuestionType = "sequence" | "matrix";
+export type QuestionType = "sequence" | "matrix" | "deductive";
 
 export type Question = {
   id: number;
