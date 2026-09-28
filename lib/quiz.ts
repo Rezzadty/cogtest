@@ -1,10 +1,8 @@
 import { AnswerMap, Question, QuestionNavStatus, TestScore } from "@/types/quiz";
-
 export const PASSING_PERCENTAGE = 75;
 export const DEFAULT_DURATION_SECONDS = 600;
 export const TEST_QUESTION_COUNT = 25;
 export const CHOICE_LABELS = ["A", "B", "C", "D"] as const;
-
 export function getQuestionStatus(
   index: number,
   currentIdx: number,
@@ -24,10 +22,8 @@ export function calculateScore(
 ): TestScore {
   const total = questions.length;
   if (total === 0) return { score: 0, total: 0, percentage: 0, passed: false };
-
   const score = questions.reduce((acc, q, idx) => acc + (answers[idx] === q.correct ? 1 : 0), 0);
   const percentage = Math.round((score / total) * 100);
-
   return {
     score,
     total,
@@ -56,7 +52,6 @@ export function shuffleQuestion(q: Question): Question {
   const indexed = q.options.map((opt, idx) => ({ opt, isCorrect: idx === q.correct }));
   const shuffledOptionsWithMeta = shuffleArray(indexed);
   const newCorrect = shuffledOptionsWithMeta.findIndex((item) => item.isCorrect);
-
   return {
     ...q,
     options: shuffledOptionsWithMeta.map((item) => item.opt),

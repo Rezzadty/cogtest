@@ -1,7 +1,5 @@
 import { ReactNode } from "react";
-
 export type QuestionType = "sequence" | "matrix" | "deductive";
-
 export type Question = {
   id: number;
   prompt: string;
@@ -13,7 +11,6 @@ export type Question = {
 };
 
 export type AnswerMap = Record<number, number>;
-
 export type TestScore = {
   score: number;
   total: number;
