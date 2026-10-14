@@ -1,184 +1,25 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
-import { AnswerMap, ScreenState, ResultFilter, Question } from "@/types/quiz";
-import { QUESTIONS } from "@/data/questions";
-import { INDUCTIVE_QUESTIONS } from "@/data/inductiveQuestions";
-import { DEDUCTIVE_QUESTIONS } from "@/data/deductiveQuestions";
-import { NUMERICAL_QUESTIONS } from "@/data/numericalQuestions";
+import { useState, useEffect } from "react";
+import { ScreenState, AnswerMap, Question } from "@/types/quiz";
 import {
-  calculateScore,
-  formatTime,
-  getQuestionStatus,
-  createShuffledQuiz,
-  TEST_QUESTION_COUNT,
-  CHOICE_LABELS,
-} from "@/lib/quiz";
+  TEST_MODELS,
+  type TestModel,
+  MODEL_DURATION_SECONDS,
+  MODEL_INFO,
+} from "@/app/lib/testModels"; 
+import { QUESTION_BANKS } from "@/app/lib/questionBanks";
+import { createShuffledQuiz, TEST_QUESTION_COUNT, calculateScore, formatTime, getQuestionStatus } from "@/lib/quiz";
+import { Header } from "@/app/components/Header";
+import { IntroScreen } from "@/app/components/Intro/IntroScreen";
+import { TestScreen } from "@/app/components/Test/TestScreen";
+import { ResultsScreen } from "@/app/components/Results/ResultsScreen";
+import { ExitConfirmModal } from "@/app/components/Modals/ExitConfirmModal";
+import { SubmitConfirmModal } from "@/app/components/Modals/SubmitConfirmModal";
+import { NavSwitchWarnModal } from "@/app/components/Modals/NavSwitchWarnModal";
+import { handleNavModelClick } from "@/app/lib/navigation";
 
-/* ---------------------------------- Data ---------------------------------- */
-
-const TEST_MODELS = [
-  { id: "abstract", label: "Abstract Reasoning" },
-  { id: "inductive", label: "Inductive Reasoning" },
-  { id: "deductive", label: "Deductive Reasoning" },
-  { id: "numerical", label: "Numerical Reasoning" },
-] as const;
-
-type TestModel = (typeof TEST_MODELS)[number]["id"];
-
-const MODEL_DURATION_SECONDS: Record<TestModel, number> = {
-  abstract: 900,
-  inductive: 900,
-  deductive: 1200,
-  numerical: 1200,
-};
-
-const QUESTION_BANKS: Partial<Record<TestModel, Question[]>> = {
-  abstract: QUESTIONS,
-  inductive: INDUCTIVE_QUESTIONS,
-  deductive: DEDUCTIVE_QUESTIONS,
-  numerical: NUMERICAL_QUESTIONS,
-};
-
-const MODEL_INFO: Record<TestModel, string> = {
-  abstract:
-    "Presents 25 randomized questions selected from an active 100-question pool. Question ordering and answer choice positions are reshuffled on every session.",
-  inductive:
-    "Presents testing pattern discovery, matrix logic, and sequence rules. Question ordering and answer choice positions are reshuffled on every session.",
-  deductive:
-    "Presents testing syllogisms, arrangement constraints, and conditional logic. Question ordering and answer choice positions are reshuffled on every session.",
-  numerical:
-    "Presents testing percentages, ratios, rates, and data interpretation. Question ordering and answer choice positions are reshuffled on every session.",
-};
-
-/* ------------------------------ Shared styles ------------------------------ */
-
-const CARD = "bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800/80 rounded-3xl";
-const TILE = "bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-2xs shrink-0";
-const BTN_GHOST = "flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition cursor-pointer";
-const BTN_SOLID = "flex-1 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition cursor-pointer shadow-xs";
-const BADGE_PASSED = "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800";
-const BADGE_FAILED = "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800";
-
-const YOUR_ANSWER_BG = (isCorrect: boolean) =>
-  isCorrect
-    ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/60"
-    : "bg-rose-50/40 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/60";
-
-/* -------------------------------- Components ------------------------------- */
-
-function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-[screenIn_0.2s_ease-out]" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className={`${CARD} shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center animate-[menuIn_0.2s_ease-out]`}>
-          {children}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function SequenceView({ q, compact = false }: { q: Question; compact?: boolean }) {
-  const cell = compact ? "w-14 h-14" : "w-16 h-16 sm:w-20 sm:h-20";
-  const mark = `${cell} bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border-2 border-dashed border-indigo-400 dark:border-indigo-500 flex items-center justify-center font-bold shrink-0 ${
-    compact ? "text-lg text-indigo-500" : "text-2xl text-indigo-600 dark:text-indigo-400"
-  }`;
-  if (q.type === "deductive") {
-    return (
-      <div className={compact ? "space-y-1.5 text-xs text-slate-800 dark:text-slate-200" : "space-y-2 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium"}>
-        {q.sequence.map((rule, i) => (
-          <div key={i} className="flex items-start gap-2.5">
-            {compact ? (
-              <span className="text-indigo-500 font-bold shrink-0">{i + 1}.</span>
-            ) : (
-              <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                {i + 1}
-              </span>
-            )}
-            <span>{rule}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (q.type === "matrix") {
-    return (
-      <div className={`grid grid-cols-3 gap-2 ${compact ? "max-w-xs" : "sm:gap-2.5 max-w-xs sm:max-w-sm"} w-full`}>
-        {q.sequence.map((item, i) => (
-          <div key={i} className={compact ? `${TILE} ${cell}` : `aspect-square ${TILE}`}>{item}</div>
-        ))}
-        <div className={mark}>?</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`flex items-center ${compact ? "gap-2" : "gap-2 sm:gap-3"}`}>
-      {q.sequence.map((item, i) => (
-        <div key={i} className={`${TILE} ${cell}`}>{item}</div>
-      ))}
-      <span className="text-slate-400 font-bold px-1 select-none">→</span>
-      <div className={mark}>?</div>
-    </div>
-  );
-}
-
-function AnswerComparison({ q, userAns, isCorrect }: { q: Question; userAns?: number; isCorrect: boolean }) {
-  const isDeductive = q.type === "deductive";
-  return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 my-3`}>
-      <div className={`${isDeductive ? "p-3.5 flex-col justify-center" : "p-3 flex items-center gap-3"} rounded-2xl border flex ${YOUR_ANSWER_BG(isCorrect)}`}>
-        {isDeductive ? (
-          <>
-            <div className="text-xs text-slate-500 mb-1">Your Answer</div>
-            <div className="font-bold text-sm text-slate-900 dark:text-white">
-              {userAns !== undefined ? `Option ${CHOICE_LABELS[userAns]}: ${q.options[userAns]}` : "Skipped"}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center shrink-0">
-              {userAns !== undefined ? q.options[userAns] : <span className="text-xs text-slate-400">None</span>}
-            </div>
-            <div>
-              <div className="text-xs text-slate-500">Your Answer</div>
-              <div className="font-bold text-sm">
-                {userAns !== undefined ? `Option ${CHOICE_LABELS[userAns]}` : "Skipped"}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-      <div className={`${isDeductive ? "p-3.5 flex-col justify-center" : "p-3 flex items-center gap-3"} rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 flex`}>
-        {isDeductive ? (
-          <>
-            <div className="text-xs text-emerald-700 dark:text-emerald-400 mb-1">Correct Answer</div>
-            <div className="font-bold text-sm text-emerald-950 dark:text-emerald-200">
-              Option {CHOICE_LABELS[q.correct]}: {q.options[q.correct]}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="w-12 h-12 bg-white dark:bg-[#0e1422] rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-center shrink-0">
-              {q.options[q.correct]}
-            </div>
-            <div>
-              <div className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Correct Answer</div>
-              <div className="font-bold text-sm text-emerald-950 dark:text-emerald-200">
-                Option {CHOICE_LABELS[q.correct]}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------- Page ---------------------------------- */
+import { LoadingScreen } from "@/app/components/LoadingScreen";
 
 export default function Home() {
   const [screen, setScreen] = useState<ScreenState>("intro");
@@ -190,14 +31,15 @@ export default function Home() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
   const [pendingModel, setPendingModel] = useState<TestModel | null>(null);
   const [activeQuestions, setActiveQuestions] = useState<Question[]>(() =>
-    createShuffledQuiz(QUESTIONS, TEST_QUESTION_COUNT)
+    createShuffledQuiz(QUESTION_BANKS.abstract || [], TEST_QUESTION_COUNT)
   );
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [visited, setVisited] = useState<Set<number>>(new Set([0]));
+  const [secondsLeft, setSecondsLeft] = useState(MODEL_DURATION_SECONDS.abstract);
+  const [filter, setFilter] = useState<"all" | "wrong" | "correct">("all");
+
   const currentDuration = MODEL_DURATION_SECONDS[selectedModel];
-  const [secondsLeft, setSecondsLeft] = useState(MODEL_DURATION_SECONDS["abstract"]);
-  const [filter, setFilter] = useState<ResultFilter>("all");
 
   useEffect(() => {
     if (screen !== "test") return;
@@ -215,7 +57,7 @@ export default function Home() {
   }, [screen]);
 
   const handleStart = () => {
-    const bank = QUESTION_BANKS[selectedModel] || QUESTIONS;
+    const bank = QUESTION_BANKS[selectedModel] || QUESTION_BANKS.abstract || [];
     setActiveQuestions(createShuffledQuiz(bank, Math.min(TEST_QUESTION_COUNT, bank.length)));
     setAnswers({});
     setVisited(new Set([0]));
@@ -236,14 +78,8 @@ export default function Home() {
     setAnswers((prev) => ({ ...prev, [currentIdx]: choiceIdx }));
   };
 
-  const handleNavModelClick = (modelId: TestModel) => {
-    if (screen === "test") {
-      setPendingModel(modelId);
-      setNavWarnOpen(true);
-    } else {
-      setSelectedModel(modelId);
-      setSecondsLeft(MODEL_DURATION_SECONDS[modelId]);
-    }
+  const onModelClick = (modelId: TestModel) => {
+    handleNavModelClick(modelId, screen, setPendingModel, setNavWarnOpen, setSelectedModel, setSecondsLeft);
   };
 
   const confirmNavSwitch = () => {
@@ -257,9 +93,9 @@ export default function Home() {
   };
 
   const jumpTo = (idx: number, direction?: "forward" | "backward") => {
-  setNavDirection(direction ?? (idx >= currentIdx ? "forward" : "backward"));
-  setVisited((prev) => new Set(prev).add(idx));
-  setCurrentIdx(idx);
+    setNavDirection(direction ?? (idx >= currentIdx ? "forward" : "backward"));
+    setVisited((prev) => new Set(prev).add(idx));
+    setCurrentIdx(idx);
   };
 
   const handleSkip = () => {
@@ -267,486 +103,69 @@ export default function Home() {
     jumpTo(nextIdx, "forward");
   };
 
-  const currentQ = activeQuestions[currentIdx] || activeQuestions[0];
   const { score, percentage, passed } = calculateScore(answers, activeQuestions);
-
   const answeredCount = Object.keys(answers).length;
-  const skippedCount = Array.from(visited).filter(
-    (idx) => answers[idx] === undefined && idx !== currentIdx
-  ).length;
   const remainingCount = activeQuestions.length - answeredCount;
-
-  const introStats = [
-    { label: "Questions", value: "25" },
-    { label: "Time Limit", value: `${Math.floor(currentDuration / 60)} min` },
-    { label: "Cutoff", value: "75%" },
-  ];
-
-  const paletteStats = [
-    { label: "Answered", value: answeredCount, cls: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/80 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-emerald-800 dark:text-emerald-300" },
-    { label: "Skipped", value: skippedCount, cls: "bg-amber-50 dark:bg-amber-950/30 border-amber-200/80 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 text-amber-800 dark:text-amber-300" },
-    { label: "Left", value: remainingCount, cls: "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 text-slate-800 dark:text-slate-200" },
-  ];
-
-  const legend = [
-    { label: "Answered", dot: "bg-emerald-600" },
-    { label: "Skipped (viewed, no answer)", dot: "border-2 border-amber-500 bg-amber-100 dark:bg-amber-950" },
-    { label: "Current Question", dot: "border-2 border-indigo-600 bg-indigo-100 dark:bg-indigo-950" },
-    { label: "Unvisited", dot: "bg-slate-200 dark:bg-slate-700" },
-  ];
+  const isLastQuestion = currentIdx === activeQuestions.length - 1;
 
   return (
-  <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 flex flex-col font-sans transition-colors">
-    <header className="w-full border-b border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-[#0c1220]/80 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-        {/* -------- Logo -------- */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
-            CogTest
-          </span>
-          <span className="hidden sm:inline-flex text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40">
-            Simulator
-          </span>
-        </div>
-        {/* -------- Desktop Nav -------- */}
-        <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
-          {TEST_MODELS.map((model) => (
-            <button
-              key={model.id}
-              type="button"
-              onClick={() => handleNavModelClick(model.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ease-out cursor-pointer whitespace-nowrap border active:scale-95 ${
-                selectedModel === model.id
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60"
-              }`}
-            >
-              {model.label}
-            </button>
-          ))}
-        </nav>
-        {/* -------- Mobile Selector -------- */}
-        <div className="relative md:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-[#161f33] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 cursor-pointer shadow-2xs transition-all duration-200 hover:bg-slate-200/70 dark:hover:bg-[#1c2740]"
-          >
-            <span className="truncate max-w-150px xs:max-w-[200px]">
-              {TEST_MODELS.find((m) => m.id === selectedModel)?.label}
-            </span>
-            <svg
-              className={`w-3.5 h-3.5 shrink-0 text-slate-500 transition-transform duration-300 ${mobileMenuOpen ? "rotate-180" : ""}`}
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                clipRule="evenodd"
+    <LoadingScreen>
+      <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 flex flex-col font-sans transition-colors">
+        <Header
+          selectedModel={selectedModel}
+          screen={screen}
+          onModelClick={onModelClick}
+          onMenuToggle={() => setMobileMenuOpen((v) => !v)}
+          mobileMenuOpen={mobileMenuOpen}
+        />
+        <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8">
+          <div key={`${screen}-${selectedModel}`} className="w-full max-w-6xl animate-[screenIn_0.35s_ease-out]">
+            {screen === "intro" && <IntroScreen selectedModel={selectedModel} onStart={handleStart} />}
+            {screen === "test" && (
+              <TestScreen
+                activeQuestions={activeQuestions}
+                currentIdx={currentIdx}
+                secondsLeft={secondsLeft}
+                answers={answers}
+                visited={visited}
+                navDirection={navDirection}
+                onSelect={handleSelect}
+                onJumpTo={jumpTo}
+                onSkip={handleSkip}
+                onExit={() => setExitConfirmOpen(true)}
+                onSubmit={() => setSubmitConfirmOpen(true)}
+                onPrevious={() => jumpTo(currentIdx - 1)}
+                onNext={() => jumpTo(currentIdx + 1)}
+                canGoPrevious={currentIdx > 0}
+                isLastQuestion={isLastQuestion}
               />
-            </svg>
-          </button>
-
-          {/* Invisible backdrop (closes menu on outside click) */}
-          <div
-            className={`fixed inset-0 z-40 transition-opacity duration-200 ${
-              mobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-            }`}
-            onClick={() => setMobileMenuOpen(false)}
-          />
-
-          {/* Dropdown panel */}
-          <div
-            className={`absolute right-0 mt-2 w-56 bg-white dark:bg-[#111726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1 origin-top-right transition-all duration-200 ease-out ${
-              mobileMenuOpen
-                ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-            }`}
-          >
-            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800/80 mb-0.5">
-              Select Test Model
-            </div>
-            {TEST_MODELS.map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleNavModelClick(model.id);
-                }}
-                className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-xs font-medium text-left transition-all duration-200 cursor-pointer ${
-                  selectedModel === model.id
-                    ? "bg-indigo-600 text-white font-semibold"
-                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70"
-                }`}
-              >
-                <span>{model.label}</span>
-                {selectedModel === model.id && (
-                  <svg
-                    className="w-3.5 h-3.5 shrink-0"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="2,8 6,12 14,4" />
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>  
-        </div>  
-      </div>  
-    </header>
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8"> 
-        <div key={`${screen}-${selectedModel}`} className="w-full max-w-6xl animate-[screenIn_0.35s_ease-out]">
-          {screen === "intro" && (
-            <div className={`max-w-2xl mx-auto ${CARD} p-6 sm:p-10 shadow-sm text-center`}>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40 mb-4">
-                Employment Assessment Simulator
-              </span>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3 text-slate-950 dark:text-white">
-                {TEST_MODELS.find((m) => m.id === selectedModel)?.label} Test
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
-                {MODEL_INFO[selectedModel]}
-              </p>
-              <div className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto text-left">
-                {introStats.map((stat) => (
-                  <div key={stat.label} className="bg-slate-50 dark:bg-[#161f33] border border-slate-200/60 dark:border-slate-800/80 p-3.5 rounded-2xl">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">{stat.label}</div>
-                    <div className="text-xl sm:text-2xl font-bold mt-0.5 text-slate-900 dark:text-slate-100">{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/50 rounded-2xl p-4 mb-8 text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 text-left max-w-md mx-auto leading-relaxed">
-                Use the side question palette during the exam to quickly return to skipped or unvisited questions before the countdown expires.
-              </div>
-              <button
-                onClick={handleStart}
-                disabled={!QUESTION_BANKS[selectedModel]}
-                className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-sm hover:shadow transition cursor-pointer">
-                {QUESTION_BANKS[selectedModel] ? "Start Practice Test" : "Coming Soon"}
-              </button>
-            </div>
-          )}
-
-          {/* -------------------------------- Test ------------------------------ */}
-          {screen === "test" && (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] items-start gap-6">
-              <div className={`w-full ${CARD} p-5 sm:p-8 shadow-xs`}>
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-4 mb-6">
-                  <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Question</span>
-                    <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">
-                      {currentIdx + 1} <span className="text-slate-400 text-sm font-normal">/ {activeQuestions.length}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`font-mono font-bold text-sm px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-                      secondsLeft <= 90
-                        ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/50 animate-pulse"
-                        : "bg-slate-100 text-slate-800 border-slate-200/80 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700/60"
-                    }`}>
-                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="8" cy="9" r="5.5" />
-                        <polyline points="8,6 8,9 10,9" />
-                        <line x1="6" y1="1.5" x2="10" y2="1.5" strokeWidth="2" />
-                      </svg>
-                      <span>{formatTime(secondsLeft)}</span>
-                    </div>
-                    <button
-                      onClick={() => setExitConfirmOpen(true)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition cursor-pointer"
-                    >
-                      Exit
-                    </button>
-                  </div>
-                </div>
-                <div
-                  key={currentIdx}
-                  style={{
-                    animation: `${navDirection === "forward" ? "slideInRight" : "slideInLeft"} 0.3s ease-out`,
-                  }}
-                >
-                  <h2 className="text-base sm:text-lg font-semibold mb-5 text-slate-900 dark:text-slate-100">
-                    {currentQ.prompt}
-                  </h2>
-                  {currentQ.type === "deductive" ? (
-                    <div className="mb-6 p-4 sm:p-5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl border border-slate-200 dark:border-slate-800">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2.5 flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="1" width="12" height="14" rx="1.5" />
-                          <line x1="5" y1="5" x2="11" y2="5" />
-                          <line x1="5" y1="8" x2="11" y2="8" />
-                          <line x1="5" y1="11" x2="9" y2="11" />
-                        </svg>
-                        <span>Premises &amp; Constraints</span>
-                      </div>
-                      <SequenceView q={currentQ} />
-                    </div>
-                  ) : (
-                    <div className={`mb-6 p-4 sm:p-5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl border border-slate-200 dark:border-slate-800 ${currentQ.type === "matrix" ? "flex justify-center" : "overflow-x-auto flex justify-center"}`}>
-                      <SequenceView q={currentQ} />
-                    </div>
-                  )}
-                  <div className="mb-8">
-                    <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-3">
-                      Select Answer Choice
-                    </div>
-                    <div className={currentQ.type === "deductive" ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-2 sm:grid-cols-4 gap-3"}>
-                      {currentQ.options.map((opt, optIdx) => {
-                        const isSelected = answers[currentIdx] === optIdx;
-                        return (
-                          <button
-                            key={optIdx}
-                            onClick={() => handleSelect(optIdx)}
-                            className={`relative flex items-center p-3.5 sm:p-4 rounded-2xl border-2 transition-all cursor-pointer text-left ${
-                              currentQ.type === "deductive" ? "min-h-64px" : "aspect-square sm:aspect-auto sm:h-28 flex-col justify-center"
-                            } ${
-                              isSelected
-                                ? "border-indigo-600 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-950/40 shadow-xs"
-                                : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#161f33]/40 hover:border-slate-300 dark:hover:border-slate-700"
-                            }`}
-                          >
-                            <span
-                              className={`${
-                                currentQ.type === "deductive"
-                                  ? "shrink-0 mr-3 w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold"
-                                  : "absolute top-2 left-2 text-xs font-bold"
-                              } ${
-                                isSelected
-                                  ? "bg-indigo-600 text-white"
-                                  : "bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                              }`}
-                            >
-                              {CHOICE_LABELS[optIdx]}
-                            </span>
-                            <div className={currentQ.type === "deductive" ? "flex-1 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100" : "w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center mt-1"}>
-                              {opt}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800/80 pt-5 gap-2">
-                  <button
-                    disabled={currentIdx === 0}
-                    onClick={() => jumpTo(currentIdx - 1)}
-                    className="px-4 py-2.5 border border-slate-200 dark:border-slate-700/80 rounded-xl disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 transition"
-                  >
-                    Previous
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSkip}
-                      className="px-4 py-2.5 border border-amber-300/80 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs sm:text-sm font-semibold hover:bg-amber-100/60 dark:hover:bg-amber-950/50 transition cursor-pointer"
-                    >
-                      Skip
-                    </button>
-                    {currentIdx < activeQuestions.length - 1 ? (
-                      <button
-                        onClick={() => jumpTo(currentIdx + 1)}
-                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer shadow-xs"
-                      >
-                        Next
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setSubmitConfirmOpen(true)}    // ← opens the confirmation instead
-                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer shadow-xs"
-                      >
-                        Submit Test
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <aside className={`w-full ${CARD} p-5 shadow-xs lg:sticky lg:top-6`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">Question Palette</h3>
-                  <span className="text-xs text-slate-400 font-medium">25 Items</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                  {paletteStats.map((stat) => (
-                    <div key={stat.label} className={`border p-2 rounded-xl ${stat.cls.split(" ").slice(0, 2).join(" ")} border`}>
-                      <div className={`text-[10px] uppercase font-bold ${stat.cls.split(" ")[2]} ${stat.cls.split(" ")[3]}`}>{stat.label}</div>
-                      <div className={`text-lg font-extrabold ${stat.cls.split(" ").slice(4).join(" ")}`}>{stat.value}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-5 gap-1.5 sm:gap-2 mb-4">
-                  {activeQuestions.map((_, i) => {
-                    const status = getQuestionStatus(i, currentIdx, answers, visited);
-                    let style = "bg-slate-50 dark:bg-[#161f33]/60 text-slate-500 border border-slate-200 dark:border-slate-800 hover:border-slate-300";
-                    if (status === "current") style = "border-2 border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold ring-2 ring-indigo-400/20";
-                    else if (status === "answered") style = "bg-emerald-600 text-white border border-emerald-600 font-semibold";
-                    else if (status === "skipped") style = "border-2 border-amber-500 bg-amber-50/80 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 font-semibold";
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => jumpTo(i)}
-                        className={`aspect-square h-9 sm:h-10 w-full rounded-xl text-xs flex items-center justify-center transition cursor-pointer ${style}`}
-                        title={`Question ${i + 1} (${status})`}
-                      >
-                        {i + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-slate-200 dark:border-slate-800/80 pt-3 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-                  {legend.map((item) => (
-                    <div key={item.label} className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded shrink-0 ${item.dot}`} />
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            </div>
-          )}
-
-          {/* ---------------------------- Exit Confirm --------------------------- */}
-          {exitConfirmOpen && (
-            <Modal onClose={() => setExitConfirmOpen(false)}>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-3">Exit Test?</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
-                Your progress will be lost and you will return to the main page. This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => setExitConfirmOpen(false)} className={BTN_GHOST}>Continue Test</button>
-                <button onClick={() => { setExitConfirmOpen(false); handleBackToMain(); }} className={`${BTN_SOLID} bg-rose-600 hover:bg-rose-500`}>Exit</button>
-              </div>
-            </Modal>
-          )}
-          
-          {/* --------------------------- Submit Confirm -------------------------- */}
-          {submitConfirmOpen && (
-            <Modal onClose={() => setSubmitConfirmOpen(false)}>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-3">Submit Test?</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-                You answered <span className="font-bold text-slate-700 dark:text-slate-200">{answeredCount}</span> of{" "}
-                {activeQuestions.length} questions
-                {remainingCount > 0 && (
-                  <> — <span className="font-bold text-amber-600 dark:text-amber-400">{remainingCount} still unanswered</span>.</>
-                )}
-                Once submitted, you cannot change your answers.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => setSubmitConfirmOpen(false)} className={BTN_GHOST}>
-                  Keep Working
-                </button>
-                <button
-                  onClick={() => { setSubmitConfirmOpen(false); setScreen("results"); }}
-                  className={`${BTN_SOLID} bg-emerald-600 hover:bg-emerald-500`}
-                >
-                  Submit
-                </button>
-              </div>
-            </Modal>
-          )}
-
-          {/* --------------------------- Nav Switch Warn ------------------------- */}
-          {navWarnOpen && (
-            <Modal onClose={() => { setNavWarnOpen(false); setPendingModel(null); }}>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-6">Switch Test Model?</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
-                You are currently in the middle of a test. Switching models will discard your current progress.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => { setNavWarnOpen(false); setPendingModel(null); }} className={BTN_GHOST}>Continue Test</button>
-                <button onClick={confirmNavSwitch} className={`${BTN_SOLID} bg-amber-500 hover:bg-amber-400`}>Switch Model</button>
-              </div>
-            </Modal>
-          )}
-
-          {/* ------------------------------ Results ----------------------------- */}
-          {screen === "results" && (
-            <div className="space-y-6">
-              <div className={`${CARD} p-6 sm:p-10 shadow-xs text-center`}>
-                <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold mb-3 ${passed ? BADGE_PASSED : BADGE_FAILED}`}>
-                  {passed ? "Assessment Passed" : "Did Not Meet Cutoff"}
-                </span>
-                <h1 className="text-4xl font-black text-slate-950 dark:text-white mb-1">
-                  {score} / {activeQuestions.length}
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
-                  {percentage}% correct score (Pass requirement: 75%)
-                </p>
-                <div className="flex flex-col sm:flex-row justify-center gap-3">
-                  <button onClick={handleStart} className="px-7 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-semibold transition cursor-pointer text-sm shadow-xs">
-                    Retake Test (New Shuffled 25)
-                  </button>
-                  <button onClick={handleBackToMain} className="px-7 py-3 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-semibold transition cursor-pointer text-sm">
-                    Back to Main Page
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">Answer Breakdown</h2>
-                <div className="flex gap-1 bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
-                  {(["all", "wrong", "correct"] as const).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setFilter(f)}
-                      className={`px-3 py-1.5 rounded-lg capitalize transition cursor-pointer ${
-                        filter === f
-                          ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold"
-                          : "text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {activeQuestions.map((q, idx) => {
-                  const userAns = answers[idx];
-                  const isCorrect = userAns === q.correct;
-                  if (filter === "wrong" && isCorrect) return null;
-                  if (filter === "correct" && !isCorrect) return null;
-                  return (
-                    <div
-                      key={`${q.id}-${idx}`}
-                      className={`bg-white dark:bg-[#111726] border rounded-3xl p-5 sm:p-7 shadow-xs ${
-                        isCorrect ? "border-emerald-200/90 dark:border-emerald-900/50" : "border-rose-200/90 dark:border-rose-900/50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div>
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Question {idx + 1}</span>
-                          <h3 className="font-semibold text-base sm:text-lg mt-0.5 text-slate-900 dark:text-slate-100">{q.prompt}</h3>
-                        </div>
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold shrink-0 ${isCorrect ? BADGE_PASSED : BADGE_FAILED}`}>
-                          {isCorrect ? "Correct" : userAns === undefined ? "Skipped" : "Incorrect"}
-                        </span>
-                      </div>
-                      <div className="my-4 p-3.5 bg-slate-50 dark:bg-[#161f33]/50 rounded-2xl border border-slate-200 dark:border-slate-800/80 overflow-x-auto">
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                          {q.type === "deductive" ? "Premises:" : "Pattern:"}
-                        </div>
-                        <SequenceView q={q} compact />
-                      </div>
-                      <AnswerComparison q={q} userAns={userAns} isCorrect={isCorrect} />
-                      <div className="mt-3 p-3.5 bg-slate-50 dark:bg-[#161f33]/60 rounded-2xl text-xs sm:text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 leading-relaxed">
-                        <span className="font-bold text-slate-900 dark:text-white">Rule: </span>
-                        {q.rule}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+            )}
+            {screen === "results" && (
+              <ResultsScreen
+                activeQuestions={activeQuestions}
+                answers={answers}
+                score={score}
+                percentage={percentage}
+                passed={passed}
+                filter={filter}
+                onFilterChange={setFilter}
+                onRetake={handleStart}
+                onBackToMain={handleBackToMain}
+              />
+            )}
+          </div>
+        </main>
+        <ExitConfirmModal isOpen={exitConfirmOpen} onClose={() => setExitConfirmOpen(false)} onExit={handleBackToMain} />
+        <SubmitConfirmModal
+          isOpen={submitConfirmOpen}
+          onClose={() => setSubmitConfirmOpen(false)}
+          onSubmit={() => setScreen("results")}
+          answeredCount={answeredCount}
+          totalQuestions={activeQuestions.length}
+          remainingCount={remainingCount}
+        />
+        <NavSwitchWarnModal isOpen={navWarnOpen} onClose={() => { setNavWarnOpen(false); setPendingModel(null); }} onConfirm={confirmNavSwitch} />
+      </div>
+    </LoadingScreen>
   );
 }
