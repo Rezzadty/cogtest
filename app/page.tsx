@@ -176,7 +176,17 @@ export default function Home() {
           totalQuestions={activeQuestions.length}
           remainingCount={remainingCount}
         />
-        <NavSwitchWarnModal isOpen={navWarnOpen} onClose={() => { setNavWarnOpen(false); setPendingModel(null); }} onConfirm={confirmNavSwitch} />
+        <NavSwitchWarnModal 
+          isOpen={navWarnOpen} 
+          onClose={() => { setNavWarnOpen(false); setPendingModel(null); }} 
+          onConfirm={confirmNavSwitch} 
+          screen={screen === "results" ? "results" : "test"}
+        />
+        <footer className="py-6 px-4 sm:px-6 md:px-8 text-left border-t border-slate-200 dark:border-slate-800/60">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            © {new Date().getFullYear()} <span className="text-indigo-600 dark:text-indigo-400 font-bold">Rezzadty</span>. All rights reserved.
+          </p>
+        </footer>
       </div>
     </LoadingScreen>
   );
