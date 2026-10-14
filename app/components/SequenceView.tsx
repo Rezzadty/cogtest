@@ -1,7 +1,7 @@
 "use client";
 
 import { Question } from "@/types/quiz";
-import { CHOICE_LABELS } from "@/app/lib/quiz";
+import { CHOICE_LABELS } from "@/lib/quiz";
 
 const TILE = "bg-white dark:bg-[#0e1422] rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-2xs shrink-0";
 

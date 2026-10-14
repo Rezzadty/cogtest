@@ -39,13 +39,13 @@ export function QuestionPalette({ activeQuestions, currentIdx, answers, visited,
       </div>
       <div className="grid grid-cols-3 gap-2 mb-4 text-center">
         {[
-          { label: "Answered", value: answeredCount, cls: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/80 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-emerald-800 dark:text-emerald-300" },
-          { label: "Skipped", value: skippedCount, cls: "bg-amber-50 dark:bg-amber-950/30 border-amber-200/80 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 text-amber-800 dark:text-amber-300" },
+          { label: "Answered", value: answeredCount, cls: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-400 text-emerald-800 dark:text-emerald-300" },
+          { label: "Skipped", value: skippedCount, cls: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 text-amber-800 dark:text-amber-300" },
           { label: "Left", value: remainingCount, cls: "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 text-slate-800 dark:text-slate-200" },
         ].map((stat) => (
-          <div key={stat.label} className={`border p-2 rounded-xl ${stat.cls.split(" ").slice(0, 2).join(" ")} border`}>
-            <div className={`text-[10px] uppercase font-bold ${stat.cls.split(" ")[2]} ${stat.cls.split(" ")[3]}`}>{stat.label}</div>
-            <div className={`text-lg font-extrabold ${stat.cls.split(" ").slice(4).join(" ")}`}>{stat.value}</div>
+          <div key={stat.label} className={`border p-2 rounded-xl ${stat.cls.split(" ").slice(0, 2).join(" ")} ${stat.cls.split(" ")[2]}`}>
+            <div className={`text-[10px] uppercase font-bold ${stat.cls.split(" ")[3]} ${stat.cls.split(" ")[4]}`}>{stat.label}</div>
+            <div className={`text-lg font-extrabold ${stat.cls.split(" ").slice(5).join(" ")}`}>{stat.value}</div>
           </div>
         ))}
       </div>

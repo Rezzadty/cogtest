@@ -1,7 +1,7 @@
 "use client";
 
 import { Question } from "@/types/quiz";
-import { CHOICE_LABELS } from "@/app/lib/quiz";
+import { CHOICE_LABELS } from "@/lib/quiz";
 import { SequenceView } from "@/app/components/SequenceView";
 import { AnswerComparison } from "@/app/components/AnswerComparison";
 import { CARD, BADGE_PASSED, BADGE_FAILED } from "@/app/lib/styles";

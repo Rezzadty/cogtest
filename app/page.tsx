@@ -42,6 +42,18 @@ export default function Home() {
   const currentDuration = MODEL_DURATION_SECONDS[selectedModel];
 
   useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (screen === "test") {
+        e.preventDefault();
+        e.returnValue = ""; // Triggers the browser's standard confirmation dialog
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [screen]);
+
+  useEffect(() => {
     if (screen !== "test") return;
     const interval = setInterval(() => {
       setSecondsLeft((s) => {

@@ -118,8 +118,9 @@ export function TestScreen({
                       currentQ.type === "deductive" ? "min-h-64px" : "aspect-square sm:aspect-auto sm:h-28 flex-col justify-center"
                     } ${
                       selected
-                        ? "border-indigo-600 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-950/40 shadow-xs"
+                        ? "border-indigo-600 bg-indigo-50/60 dark:border-indigo-500 dark:bg-indigo-950/40 shadow-[0_0_15px_rgba(79,70,229,0.4)] dark:shadow-[0_0_20px_rgba(99,102,241,0.3)]"
                         : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#161f33]/40 hover:border-slate-300 dark:hover:border-slate-700"
+
                     }`}
                   >
                     <span
